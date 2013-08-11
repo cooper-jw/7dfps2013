@@ -5,6 +5,7 @@ public class FPSController : MonoBehaviour {
 	
 	public bool isLocal =  true;
 	private CharacterController cc;
+	private GUIScript GUICode;
 	public GameObject camHolder;
 	public float yCamSens = 30f;
 	public float xCamSens = 30f;
@@ -19,6 +20,15 @@ public class FPSController : MonoBehaviour {
 	public bool sprinting = false;
 	public float yMovement = 0f;
 	public Vector3 lookDir;
+	public bool canControl = true;
+	
+	//Gun list:
+	// 0 = None
+	// 1 = Pistol
+	// 2 = Rocket
+	// 3 = Machine Gun
+	// ifDone 4 = Shotgun
+	public int currentGun = 0;
 	
 	// Use this for initialization
 	void Start() 
@@ -27,6 +37,10 @@ public class FPSController : MonoBehaviour {
 		{
 			//Set the character controller:
 			cc = GetComponent<CharacterController>();
+			//Set GUIScript:
+			GUICode = GetComponent<GUIScript>();
+			//Turn on the GUI:
+			GUICode.isLocal = true;
 			//Make the camera ours bb:
 			Camera.main.transform.parent = camHolder.transform;
 			//Zero out the camera position:
@@ -45,7 +59,10 @@ public class FPSController : MonoBehaviour {
 	void Update() 
 	{
 		if(isLocal)
-		{
+		{	
+			//Can we control
+			canControl = !GUICode.paused;
+			
 			//Camera Input:
 			camAngle.x -= Input.GetAxis("Mouse Y") * Time.deltaTime * yCamSens;
 			camAngle.y += Input.GetAxis("Mouse X") * Time.deltaTime * xCamSens;
@@ -53,7 +70,8 @@ public class FPSController : MonoBehaviour {
 			camAngle.x = Mathf.Clamp(camAngle.x, minLookHeight, maxLookHeight);
 			camAngle.z = 0f;
 			//Apply camera movement:
-			camHolder.transform.localEulerAngles = camAngle;
+			if(canControl)
+				camHolder.transform.localEulerAngles = camAngle;
 			
 			//Used for storing input data:
 			Vector3 inputVector = Vector3.zero;
@@ -73,10 +91,13 @@ public class FPSController : MonoBehaviour {
 				else sprinting = false;
 			
 			//Apply movement:
-			if (!sprinting){
-				cc.Move(inputVector * Time.deltaTime * walkSpeed);
-			}else{
-				cc.Move(inputVector * Time.deltaTime * sprintSpeed);
+			if(canControl)
+			{
+				if (!sprinting){
+					cc.Move(inputVector * Time.deltaTime * walkSpeed);
+				}else{
+					cc.Move(inputVector * Time.deltaTime * sprintSpeed);
+				}
 			}
 			
 			//Falling/Gravity:
@@ -91,7 +112,7 @@ public class FPSController : MonoBehaviour {
 			//Jump Input:
 			if(grounded){
 				yMovement = 0f;
-				if(Input.GetKeyDown("space"))
+				if(Input.GetKeyDown("space") && canControl)
 				{
 					yMovement = 4f;
 				}
