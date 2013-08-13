@@ -4,6 +4,8 @@ using System.Collections;
 public class MenuGUI : MonoBehaviour {
 	
 	public string currentMenu = "main";
+	public GameObject networkObject;
+	private NetworkScript myNetwork;
 	
 	//Button Positions:
 	public Rect next;
@@ -25,6 +27,7 @@ public class MenuGUI : MonoBehaviour {
 	
 	public string dcIP = "192.0.0.1";
 	
+	//Setting Variables:
 	public bool isFullscreen = false;
 	public Resolution selectedResolution;
 	public Resolution currentResolution;
@@ -34,30 +37,57 @@ public class MenuGUI : MonoBehaviour {
 	public string isFullscreenString;
 	public string curGraphicString;
 	private string gLoopString;
+	public int mouseSens;
+	public float mouseSensf;
+	
+	//Server Setup Variables:
+	public string serverName = "Default Name";
+	public int maxPlayers;
+	public string maxPlayersString = "16";
+	public int selectedGM = 0;
+	public string selectedGMString;
+	public string loopGMString;
+	public int selectedMap = 0;
+	public string selectedMapString;
+	public string loopMapString;
 	
 	// Use this for initialization
 	void Start()
 	{
+		//Get the network script:
+		myNetwork = networkObject.GetComponent<NetworkScript>();
+		//Set current menu:
 		currentMenu = "main";
+		//Setup GUI things:
 		mainBox = new Rect(180, 20, Screen.width - 200, Screen.height - 65);
 		back = new Rect(180, Screen.height - 35, 100, 25);
 		next = new Rect(Screen.width - 120, Screen.height - 35, 100, 25);
-		
 		//Get Player Prefs:
 		playerName = PlayerPrefs.GetString("playerName");
 		playerSkinURL = PlayerPrefs.GetString("playerSkinURL");
-		
 		//Set up resolution variables:
 		resolutions = Screen.resolutions;
 		currentResolution = Screen.currentResolution;
 		selectedResolution = currentResolution;
 		//Set up graphic quality variables:
 		currentGraphics = QualitySettings.GetQualityLevel();
-		Debug.Log(currentGraphics);
 		selectedGraphics = currentGraphics;
 		//Setup fullscreen variable:
 		isFullscreen = Screen.fullScreen;
-		
+		//Mouse Sensitivy Setup:
+		if(PlayerPrefs.GetInt("mouseSens") != 0)
+			mouseSens = PlayerPrefs.GetInt("mouseSens");
+		else
+		{
+			mouseSens = 100;
+			PlayerPrefs.SetInt("mouseSens", mouseSens);
+			PlayerPrefs.SetInt("ySens", mouseSens);
+			PlayerPrefs.SetInt("xSens", mouseSens);
+		}
+		mouseSensf = (float)mouseSens;
+		//Server Setup Variables:
+		selectedMap = 0;
+		selectedGM = 0;
 	}
 	
 	// Update is called once per frame
@@ -93,6 +123,13 @@ public class MenuGUI : MonoBehaviour {
 				curGraphicString = "MEGA";
 				break;
 		}
+		
+		maxPlayers = int.Parse(maxPlayersString);
+		
+		mouseSens = (int)mouseSensf;
+		
+		if(Input.GetKeyDown(KeyCode.F12))
+			Application.LoadLevel("TestLevel");
 	}
 	
 	void OnGUI()
@@ -136,155 +173,208 @@ public class MenuGUI : MonoBehaviour {
 		//Exit:
 		if(GUI.Button(new Rect(left, top + ((height + buttonIncrement) * 7), width, height), "Exit Game"))
 		{
-			//Exit();
+			Application.Quit();
 		}
 		
 		//Main area:
 		GUILayout.BeginArea(mainBox);
-			//Menu options:
-			if(currentMenu == "main")
+		//Menu options:
+		if(currentMenu == "main")
+		{
+			GUILayout.Label("Welcome to Killer Death Cubes (KDC)");
+			GUILayout.Label("This game was made for #7dfps by Joe Cooper");
+			GUILayout.Label("Find me on twitter @themisfit25");
+		}
+		else if(currentMenu == "startServer")
+		{
+			GUILayout.Label("Start Server:");
+			GUILayout.Space(10);
+			//Server Name:
+			GUILayout.Label("Server Name (this needs to be changed!):");
+			serverName = GUILayout.TextField(serverName);
+			GUILayout.Space(10);
+			//Max Players:
+			GUILayout.Label ("Max Players:");
+			maxPlayersString = GUILayout.TextField(maxPlayersString);
+			GUILayout.Space(10);
+			//Gamemode:
+			GUILayout.Label("Gamemode:");
+			GUILayout.BeginHorizontal();
+			for(int i = 0; i < 1; i++)
 			{
-				GUILayout.Label("Welcome to Killer Death Cubes (KDC)");
-				GUILayout.Label("This game was made for #7dfps by Joe Cooper");
-				GUILayout.Label("Find me on twitter @themisfit25");
-			}
-			else if(currentMenu == "startServer")
-			{
-				
-			}
-			else if(currentMenu == "serverList")
-			{
-				//Headings:
-				GUILayout.BeginHorizontal();
-				GUILayout.Label("Server Name:");
-				GUILayout.Label("Players:");
-				GUILayout.Label("Map:");
-				GUILayout.Label("Gamemode:");
-				GUILayout.Label ("Ping:");
-				GUILayout.Label ("Connect:");
-				GUILayout.EndHorizontal();
-				GUILayout.Space(5);
-				//NetworkScript.GetServers()
-				//for every server in NetwrokScript.ServerList
-				//{
-				//	BeginHorizontal()
-				//	make label(name)
-				//	make label(curPlayers + / + maxPlayers)
-				//	make label(map)
-				//	make label(gm)
-				//	make label(ping)
-				//	make button(connect)
-				//	EndHorizontal()
-				//}
-				//Test:
-//				GUILayout.BeginHorizontal();
-//				GUILayout.Label("TestServer");
-//				GUILayout.Label("12/16");
-//				GUILayout.Label("MapName");
-//				GUILayout.Label("DeathMatch");
-//				GUILayout.Label ("31");
-//				GUILayout.Button("Connect");
-//				GUILayout.EndHorizontal();
-			}
-			else if(currentMenu == "directConnect")
-			{
-				GUILayout.Label("Direct Connect:");
-				dcIP = GUILayout.TextField(dcIP);
-				if(GUILayout.Button("Connect")) DirectConnect();
-			}
-			else if(currentMenu == "customization")
-			{
-				//Name:
-				GUILayout.Label("Player Name:");
-				playerName = GUILayout.TextField(playerName);
-				//Skin:
-				GUILayout.Label("Player Skin URL:");
-				playerSkinURL = GUILayout.TextField(playerSkinURL);
-				//Save:
-				if(GUILayout.Button("Save Settings!")) savePlayerCustomizations();
-			}
-			else if(currentMenu == "options")
-			{
-				
-			}
-			else if(currentMenu == "credits")
-			{
-				
-			}
-			else if(currentMenu == "settings")
-			{
-				//Fullscreen:
-				GUILayout.Label("Fullscreen:");
-				if(GUILayout.Button (isFullscreenString))
-					isFullscreen = !isFullscreen;
-				GUILayout.Space(15);
-				//Resolution Options:
-				GUILayout.Label("Resolution:");
-				GUILayout.BeginHorizontal();
-				int count = 1;
-				foreach(Resolution res in resolutions)
+				switch(i)
 				{
-					if(GUILayout.Button(res.width + "x" + res.height))
-						selectedResolution = res;
-					count++;
-					if(count > 5)
-					{
-						GUILayout.EndHorizontal();
-						GUILayout.BeginHorizontal();
-						count = 1;	
-					}
+					case(0):
+						loopGMString = "Free For All";
+						break;
 				}
-				GUILayout.EndHorizontal();
-				GUILayout.Label("The current resolution is " + currentResolution.width + "x" + currentResolution.height + ".");
-				GUILayout.Space(15);
-				//Graphic Options:
-				GUILayout.Label("Graphic Quality:");
+				if(GUILayout.Button(loopGMString))
+				{
+					selectedGM = i;
+				}
+			}
+			GUILayout.EndHorizontal();
+			GUILayout.Space(10);
+			//Map:
+			GUILayout.Label("Map:");
+			GUILayout.BeginHorizontal();
+			for(int i = 0; i < 1; i++)
+			{
+				switch(i)
+				{
+					case(0):
+						loopMapString = "TestMap";
+						break;
+				}
+				if(GUILayout.Button(loopMapString))
+				{
+					selectedMap = i;
+				}
+			}
+			GUILayout.EndHorizontal();
+			GUILayout.Space(10);
+		}
+		else if(currentMenu == "serverList")
+		{
+			//Headings:
+			GUILayout.BeginHorizontal();
+			GUILayout.Label("Server Name:");
+			GUILayout.Label("Players:");
+			GUILayout.Label("Map|Gamemode:");
+			GUILayout.Label ("Connect:");
+			GUILayout.EndHorizontal();
+			GUILayout.Space(5);
 			
+			foreach(HostData hd in myNetwork.hostData)
+			{
 				GUILayout.BeginHorizontal();
-				for(int i = 0; i < 6; i++)
+				
+				GUILayout.Label(hd.gameName);
+				GUILayout.Label(hd.connectedPlayers.ToString() + "/" + hd.playerLimit.ToString());
+				GUILayout.Label(hd.comment);
+				if(GUILayout.Button("Connect"))
 				{
-					switch(i)
-					{
-						case(0):
-							gLoopString = "Basic";
-							break;
-						case(1):
-							gLoopString = "Low";
-							break;
-						case(2):
-							gLoopString = "Medium";
-							break;
-						case(3):
-							gLoopString = "High";
-							break;
-						case(4):
-							gLoopString = "Ultra";
-							break;
-						case(5):
-							gLoopString = "MEGA";
-							break;
-					}
-					
-					if(GUILayout.Button(gLoopString))
-						selectedGraphics = i;
+					currentMenu = "connecting";
+					myNetwork.Connect(hd);
 				}
+				
 				GUILayout.EndHorizontal();
-				GUILayout.Label("The current graphic quality is " + curGraphicString + ".");
-				//Apply:
-				GUILayout.Space(30);
-				if(GUILayout.Button("Apply Changes!"))
+			}
+		}
+		else if(currentMenu == "directConnect")
+		{
+			GUILayout.Label("Direct Connect:");
+			dcIP = GUILayout.TextField(dcIP);
+			if(GUILayout.Button("Connect")) DirectConnect();
+		}
+		else if(currentMenu == "customization")
+		{
+			//Name:
+			GUILayout.Label("Player Name:");
+			playerName = GUILayout.TextField(playerName);
+			//Skin:
+			GUILayout.Label("Player Skin URL:");
+			playerSkinURL = GUILayout.TextField(playerSkinURL);
+			//Save:
+			if(GUILayout.Button("Save Settings!")) savePlayerCustomizations();
+		}
+		else if(currentMenu == "credits")
+		{
+			
+		}
+		else if(currentMenu == "settings")
+		{
+			//Fullscreen:
+			GUILayout.Label("Fullscreen:");
+			if(GUILayout.Button (isFullscreenString))
+				isFullscreen = !isFullscreen;
+			GUILayout.Space(15);
+			//Resolution Options:
+			GUILayout.Label("Resolution:");
+			GUILayout.BeginHorizontal();
+			int count = 1;
+			foreach(Resolution res in resolutions)
+			{
+				if(GUILayout.Button(res.width + "x" + res.height))
+					selectedResolution = res;
+				count++;
+				if(count > 5)
 				{
-					Screen.SetResolution(selectedResolution.width, selectedResolution.height, isFullscreen);
-					currentResolution = Screen.currentResolution;
-					selectedResolution = currentResolution;
-					if(selectedGraphics != currentGraphics)
-					{
-						QualitySettings.SetQualityLevel(selectedGraphics);
-						currentGraphics = QualitySettings.GetQualityLevel();
-						selectedGraphics = currentGraphics;
-					}
+					GUILayout.EndHorizontal();
+					GUILayout.BeginHorizontal();
+					count = 1;	
 				}
 			}
+			GUILayout.EndHorizontal();
+			GUILayout.Label("The current resolution is " + currentResolution.width + "x" + currentResolution.height + ".");
+			GUILayout.Space(15);
+			//Graphic Options:
+			GUILayout.Label("Graphic Quality:");
+		
+			GUILayout.BeginHorizontal();
+			for(int i = 0; i < 6; i++)
+			{
+				switch(i)
+				{
+					case(0):
+						gLoopString = "Basic";
+						break;
+					case(1):
+						gLoopString = "Low";
+						break;
+					case(2):
+						gLoopString = "Medium";
+						break;
+					case(3):
+						gLoopString = "High";
+						break;
+					case(4):
+						gLoopString = "Ultra";
+						break;
+					case(5):
+						gLoopString = "MEGA";
+						break;
+				}
+				
+				if(GUILayout.Button(gLoopString))
+					selectedGraphics = i;
+			}
+			GUILayout.EndHorizontal();
+			GUILayout.Label("The current graphic quality is " + curGraphicString + ".");
+			GUILayout.Space(15);
+			//Mouse Sensitivity:
+			GUILayout.Label("Mouse Sensitivity:");
+			mouseSensf = GUILayout.HorizontalSlider(mouseSensf,10,300);
+			GUILayout.Label(mouseSens.ToString());
+			//Apply:
+			GUILayout.Space(30);
+			if(GUILayout.Button("Apply Changes!"))
+			{
+				Screen.SetResolution(selectedResolution.width, selectedResolution.height, isFullscreen);
+				currentResolution = Screen.currentResolution;
+				selectedResolution = currentResolution;
+				if(selectedGraphics != currentGraphics)
+				{
+					QualitySettings.SetQualityLevel(selectedGraphics);
+					currentGraphics = QualitySettings.GetQualityLevel();
+					selectedGraphics = currentGraphics;
+				}
+				if(mouseSens != PlayerPrefs.GetInt("mouseSens"))
+				{
+					PlayerPrefs.SetInt("mouseSens", mouseSens);
+					PlayerPrefs.SetInt("ySens", mouseSens);
+					PlayerPrefs.SetInt("xSens", mouseSens);
+				}
+			}
+		}
+		else if(currentMenu == "connecting")
+		{
+			GUILayout.Label("Connecting to server...");
+		}
+		else if(currentMenu == "startserver")
+		{
+			GUILayout.Label("Starting server...");
+		}
 		GUILayout.EndArea();
 		
 		if(currentMenu == "customization" || currentMenu == "options" || currentMenu == "credits" || currentMenu == "settings" || currentMenu == "directConnect" || currentMenu == "serverList")
@@ -294,23 +384,49 @@ public class MenuGUI : MonoBehaviour {
 		else if(currentMenu == "startServer")
 		{
 			if(GUI.Button(back, "Back")) currentMenu = "main";
-			if(GUI.Button(next, "Start")) StartServer();
+			if(GUI.Button(next, "Start"))
+			{
+				StartServer(serverName, maxPlayers, selectedGM, selectedMap);
+				currentMenu = "startserver";
+			}
 		}
 		
+		if(currentMenu == "serverList")
+		{
+			if(GUI.Button(next, "Refresh")) RefreshServers();
+		}
 	}
 	
 	void savePlayerCustomizations()
 	{
 		//Save player name and url to player prefs
+		if(playerName != null || playerName != " ")
+		{
+			myNetwork.playerName = playerName;
+		}else{
+			myNetwork.playerName = "DefaultName";
+			playerName = myNetwork.playerName;
+		}
 		PlayerPrefs.SetString("playerName", playerName);
 		PlayerPrefs.SetString("playerSkinURL", playerSkinURL);
+		if(playerSkinURL != null || playerSkinURL != " ")
+		{
+			myNetwork.skinURL = playerSkinURL;
+			myNetwork.hasSkin = true;
+		}else{
+			myNetwork.skinURL = playerSkinURL;
+			myNetwork.hasSkin = false;
+		}
 		Debug.Log("Saved Details");
 	}
 	
-	void StartServer()//server perameters
+	void StartServer(string name, int max, int gm, int map)//server perameters
 	{
+		if(max > 32) max = 32;
+		if(max < 2) max = 2;
+		Debug.Log("Server information " + name + " " + max + " " + gm + " " + map);
 		//Send server info to NetworkScript
-		//NetworkScript.StartServer(server perameters);
+		myNetwork.StartServer(name, max, gm, map);
 	}
 	
 	void DirectConnect()//IP perameter
@@ -321,5 +437,10 @@ public class MenuGUI : MonoBehaviour {
 	void FindQuickMatch()
 	{
 		//NetworkScript.FindQuickMatch();
+	}
+	
+	void RefreshServers()
+	{
+		myNetwork.RefreshServers();
 	}
 }

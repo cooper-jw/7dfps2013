@@ -7,8 +7,8 @@ public class FPSController : MonoBehaviour {
 	private CharacterController cc;
 	private GUIScript GUICode;
 	public GameObject camHolder;
-	public float yCamSens = 30f;
-	public float xCamSens = 30f;
+	public int yCamSens = 30;
+	public int xCamSens = 30;
 	public float walkSpeed = 10f;
 	public float sprintSpeed = 15f;
 	public float maxLookHeight = 85f;
@@ -21,7 +21,15 @@ public class FPSController : MonoBehaviour {
 	public float yMovement = 0f;
 	public Vector3 lookDir;
 	public bool canControl = true;
-	
+	private GameObject netHolder;
+	private NetworkScript theNetwork;
+	private WWW www;
+	public bool hasSkin = false;
+	public string skinURL;
+	private bool skinChanged = false;
+	public NetworkViewID viewID;
+	public string myName;
+	//Gun Variables:
 	//Gun list:
 	// 0 = None
 	// 1 = Pistol
@@ -34,7 +42,13 @@ public class FPSController : MonoBehaviour {
 	void Start() 
 	{
 		if(isLocal)
-		{
+		{	
+			//Setup Network shit:
+			netHolder = GameObject.FindGameObjectWithTag("Network");
+			theNetwork = netHolder.GetComponent<NetworkScript>();
+			viewID = theNetwork.netviewID;
+			//Set target frame rate:
+			Application.targetFrameRate = 300;
 			//Set the character controller:
 			cc = GetComponent<CharacterController>();
 			//Set GUIScript:
@@ -45,10 +59,23 @@ public class FPSController : MonoBehaviour {
 			Camera.main.transform.parent = camHolder.transform;
 			//Zero out the camera position:
 			Camera.main.transform.localPosition = Vector3.zero;
-			Camera.main.transform.localEulerAngles = Vector3.zero;	
+			Camera.main.transform.localEulerAngles = Vector3.zero;
+			if(PlayerPrefs.GetInt("ySens") != 0 && PlayerPrefs.GetInt("xSens") != 0)
+			{
+				yCamSens = PlayerPrefs.GetInt("ySens");
+				xCamSens = PlayerPrefs.GetInt("xSens");
+			}else{
+				yCamSens = 75;
+				xCamSens = 75;
+				PlayerPrefs.SetInt("ySens", yCamSens);
+				PlayerPrefs.SetInt("xSens", xCamSens);
+			}
 		}else{
 			
 		}
+		
+		if(hasSkin)
+			www = new WWW(skinURL);
 		
 		camAngle = Vector3.zero;
 		moveVec = Vector3.zero;
@@ -63,26 +90,31 @@ public class FPSController : MonoBehaviour {
 			//Can we control
 			canControl = !GUICode.paused;
 			
-			//Camera Input:
-			camAngle.x -= Input.GetAxis("Mouse Y") * Time.deltaTime * yCamSens;
-			camAngle.y += Input.GetAxis("Mouse X") * Time.deltaTime * xCamSens;
-			//Check that they're not look to high/low:
-			camAngle.x = Mathf.Clamp(camAngle.x, minLookHeight, maxLookHeight);
-			camAngle.z = 0f;
-			//Apply camera movement:
 			if(canControl)
+			{
+				//Camera Input:
+				camAngle.x -= Input.GetAxis("Mouse Y") * 0.01f * yCamSens;
+				camAngle.y += Input.GetAxis("Mouse X") * 0.01f * xCamSens;
+				//Check that they're not look to high/low:
+				camAngle.x = Mathf.Clamp(camAngle.x, minLookHeight, maxLookHeight);
+				camAngle.z = 0f;
+				//Apply camera movement:
 				camHolder.transform.localEulerAngles = camAngle;
+			}
 			
 			//Used for storing input data:
 			Vector3 inputVector = Vector3.zero;
 			
-			//Get inputs:
-			if (Input.GetKey("s")) inputVector -= Camera.main.transform.forward;
-			if (Input.GetKey("w")) inputVector += Camera.main.transform.forward;
-			if (Input.GetKey("d")) inputVector += Camera.main.transform.right;
-			if (Input.GetKey("a")) inputVector -= Camera.main.transform.right;
-			//inputVector.y = 0f;
-			inputVector.Normalize();
+			if(canControl)
+			{
+				//Get inputs:
+				if (Input.GetKey("s")) inputVector -= Camera.main.transform.forward;
+				if (Input.GetKey("w")) inputVector += Camera.main.transform.forward;
+				if (Input.GetKey("d")) inputVector += Camera.main.transform.right;
+				if (Input.GetKey("a")) inputVector -= Camera.main.transform.right;
+				//inputVector.y = 0f;
+				inputVector.Normalize();
+			}
 			
 			//Check if grounded:
 			grounded = cc.isGrounded;
@@ -126,7 +158,14 @@ public class FPSController : MonoBehaviour {
 			moveVec = inputVector;
 			
 			//Send player information:
-			//theNetwork.SendPlayer(viewID, transform.position, camAngle, moveVec);
+			theNetwork.SendPlayer(viewID, transform.position, camAngle, moveVec);
+		}
+		
+		//Change Skin:
+		if(hasSkin && www.isDone && !skinChanged)
+		{
+			myMesh.renderer.material.mainTexture = www.texture;
+			skinChanged = true;
 		}
 		
 		//Directional Animations:
