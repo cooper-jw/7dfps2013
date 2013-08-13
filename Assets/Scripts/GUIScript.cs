@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class GUIScript : MonoBehaviour {
 
@@ -24,10 +25,16 @@ public class GUIScript : MonoBehaviour {
 	public string myGunString = " ";
 	public int gunOverheatLvl = 100;
 	
+	//Chat Variables:
+	public List<ChatMessage> messages = new List<ChatMessage>();
+	public float chatFadeTime = 7.5f;
+	public float textDisplayTime = -100f;
+	public bool isWriting = false;
+	public string myMessage = "";
+	
 	// Use this for initialization
 	void Start() 
 	{
-		inGame = true;
 		myController = GetComponent<FPSController>();
 		//Network shit:
 		networkHolder = GameObject.FindGameObjectWithTag("Network");
@@ -39,7 +46,23 @@ public class GUIScript : MonoBehaviour {
 	{
 		if(isLocal)
 		{
-			if(Input.GetButton("ShowScoreboard") || Input.GetButton("ShowScoreboard2"))
+			inGame = theNetwork.connected;
+			
+			if(isWriting || paused) 
+				myController.canControl = false;
+			else myController.canControl = true;
+			
+			if(Input.GetKeyDown("t") && !isWriting)
+			{
+				isWriting = true;
+			}
+			
+			if(Input.GetKeyDown("escape"))
+			{
+				isWriting = false;
+			}
+				
+			if(Input.GetButton("ShowScoreboard"))
 			{
 				paused = true;	
 			}
@@ -47,7 +70,7 @@ public class GUIScript : MonoBehaviour {
 			
 			//Unlock the mouse if we're paused:
 			if(inGame && paused) Screen.lockCursor = false;
-				else Screen.lockCursor = true;
+				else if(!isWriting) Screen.lockCursor = true;
 			
 			//Get current gun:
 			myGun = myController.currentGun;
@@ -92,6 +115,38 @@ public class GUIScript : MonoBehaviour {
 				//Display overheat level:
 				GUI.Label(new Rect(Screen.width - 140, Screen.height - 65, 130, 25), "Overheat Level:");
 				GUI.Label(new Rect(Screen.width - 80, Screen.height - 35, 70, 25), gunOverheatLvl + "%");
+				//Display chat messages:
+				if(Time.time < textDisplayTime)
+				{
+					for(int i = 1; i < 15; i++)
+					{
+						if(i < messages.Count)
+						{
+							GUI.Label(new Rect(10,Screen.height - 55 - (i*15), 700, 20), messages[messages.Count-i].sender + " " + messages[messages.Count-i].message);
+						}
+					}
+				}
+				//Write chat messages:
+				if(isWriting)
+				{
+					Screen.lockCursor = false;
+					Screen.showCursor = true;
+					GUI.SetNextControlName("ChatBox");
+					myMessage = GUI.TextField(new Rect(10,Screen.height - 35, 500, 20), myMessage);
+					GUI.FocusControl("ChatBox");
+					if(GUI.Button(new Rect(520, Screen.height - 35, 60, 20), "Send"))
+					{
+						isWriting = false;
+						if(myMessage != "" && theNetwork.connected)
+						{
+							theNetwork.SendChatMessage(theNetwork.playerName, myMessage);
+						}
+						myMessage = "";
+					}
+				}else if(!paused){
+					Screen.lockCursor = true;
+					Screen.showCursor = false;
+				}
 			}
 			//Display score and pause menu:
 			else if(inGame && paused)
@@ -115,9 +170,42 @@ public class GUIScript : MonoBehaviour {
 				{
 					//Headers:
 					GUILayout.BeginHorizontal();
-					
+					GUILayout.Label("Player:");
+					GUILayout.Label("Kills:");
+					GUILayout.Label("Deaths:");
+					//If you're the host:
+					if(theNetwork.isServer)
+						//Add a kick colum:
+						GUILayout.Label("Kick:");
 					//End headers:
 					GUILayout.EndHorizontal();
+					
+					//Populate Scoreboard:
+					for(int i = 0; i < theNetwork.fpsEntities.Count; i++)
+					{
+						GUILayout.BeginHorizontal();
+						
+						GUILayout.Label(theNetwork.fpsEntities[i].myName);
+						GUILayout.Label(theNetwork.fpsEntities[i].kills.ToString());
+						GUILayout.Label(theNetwork.fpsEntities[i].deaths.ToString());
+						
+						
+						if(theNetwork.isServer)
+						{
+							if(theNetwork.fpsEntities[i].viewID != theNetwork.netviewID)
+							{
+								if(GUILayout.Button("Kick"))
+								{
+									Debug.Log("Kicking player " + theNetwork.fpsEntities[i].myName + "/" + theNetwork.fpsEntities[i].viewID.owner.ipAddress.ToString());
+									theNetwork.Kick(i);
+								}
+							}else{
+								GUILayout.Label("Can't Kick!");	
+							}
+						}
+						
+						GUILayout.EndHorizontal();
+					}
 					
 				}else{
 					Debug.Log("No scoreboard for game mode " + theNetwork.gameMode + ".");

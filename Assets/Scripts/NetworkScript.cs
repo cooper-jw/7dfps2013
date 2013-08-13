@@ -26,6 +26,9 @@ public class NetworkScript:MonoBehaviour
 	public int maxPlayers;
 	public string comment;
 	public HostData[] hostData;
+	public bool hasRegistered = false;
+	public bool hasSetGUI = false;
+	public GUIScript myGUI;
 	
 	// Use this for initialization
 	void Start() 
@@ -58,7 +61,17 @@ public class NetworkScript:MonoBehaviour
 	// Update is called once per frame
 	void Update() 
 	{
-		
+		if(levelLoaded && !hasSetGUI)
+		{
+			for(int i = 0; i < fpsEntities.Count; i++)
+			{
+				if(fpsEntities[i].viewID == netviewID)
+				{
+					myGUI = fpsEntities[i].gameObject.GetComponent<GUIScript>();	
+				}
+			}
+			hasSetGUI = true;
+		}
 	}
 	
 	public void Connect(HostData connectData)
@@ -98,19 +111,20 @@ public class NetworkScript:MonoBehaviour
 				gameModeString = "FFA";
 				break;
 		}
+		isServer = true;
+		connected = true;
 		comment = levelString + "|" + gameModeString;
 		MasterServer.RegisterHost(uniqueGameName, serverName, comment);
 	}
 	
 	void OnMasterServerEvent(MasterServerEvent msEvent)
 	{
-		if(msEvent == MasterServerEvent.RegistrationSucceeded)
+		if(msEvent == MasterServerEvent.RegistrationSucceeded && !hasRegistered && isServer && connected)
 		{
 			Debug.Log("Server Registration Succeeded");
-			isServer = true;
-			connected = true;
 			networkView.RPC( "LoadLevel", RPCMode.AllBuffered, level, lastLevelPrefix + 1);
-			lastLevelPrefix++;	
+			lastLevelPrefix++;
+			hasRegistered = true;
 		}
 		else if(msEvent == MasterServerEvent.RegistrationFailedNoServer || msEvent == MasterServerEvent.RegistrationFailedGameType)
 		{
@@ -128,11 +142,11 @@ public class NetworkScript:MonoBehaviour
 				break;
 		}
 		Network.SetSendingEnabled(0, false);
-		Network.isMessageQueueRunning = false;
+		Network.isMessageQueueRunning = true;
 		Network.SetLevelPrefix(levelPrefix);
 		preppingLevel = true;
 		Application.LoadLevel(levelString);
-		Network.isMessageQueueRunning = true;
+		//Network.isMessageQueueRunning = true;
 		Network.SetSendingEnabled(0, true);
 	}
 	
@@ -159,22 +173,28 @@ public class NetworkScript:MonoBehaviour
 	
 	void InstantiateFPSEntity(bool isLocal, NetworkViewID anID, string name, bool hasSkin, string skinURL)
 	{
-		GameObject newEntity = (GameObject)GameObject.Instantiate(fpsEntityPrefab);
-		FPSController entity = newEntity.GetComponent<FPSController>();
-		entity.hasSkin = hasSkin;
-		entity.skinURL = skinURL;
-		entity.myName = name;
-		
-		if(isLocal)
+		if(levelLoaded)
 		{
-			entity.viewID = netviewID;
-			entity.isLocal = true;
+			Debug.Log("Make a new player, isLocal " + isLocal);
+			GameObject newEntity = (GameObject)GameObject.Instantiate(fpsEntityPrefab);
+			FPSController entity = newEntity.GetComponent<FPSController>();
+			entity.hasSkin = hasSkin;
+			entity.skinURL = skinURL;
+			entity.myName = name;
+			
+			if(isLocal)
+			{
+				entity.viewID = netviewID;
+				entity.isLocal = true;
+			}else{
+				entity.isLocal = false;
+				entity.viewID = anID;	
+			}
+			
+			fpsEntities.Add(entity);
 		}else{
-			entity.isLocal = false;
-			entity.viewID = anID;	
+			StartCoroutine(WaitMakeNewPlayer(isLocal, anID, name, hasSkin, skinURL));
 		}
-		
-		fpsEntities.Add(entity);
 	}
 	
 	void OnPlayerConnected(NetworkPlayer player)
@@ -186,18 +206,18 @@ public class NetworkScript:MonoBehaviour
 	}
 	
 	//Send my player shit:
-	public void SendPlayer(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec)
+	public void SendPlayer(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec, int myKills, int myDeaths)
 	{
 		if(connected)
 		{
 			//Send everyone else an RPC with my shit:
-			networkView.RPC("SendPlayerRPC", RPCMode.Others, viewID, pos, ang, moveVec);	
+			networkView.RPC("SendPlayerRPC", RPCMode.Others, viewID, pos, ang, moveVec, myKills, myDeaths);	
 		}	
 	}
 	
 	//Recive player information:
 	[RPC]
-	void SendPlayerRPC(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec)
+	void SendPlayerRPC(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec, int kills, int deaths)
 	{
 		if(connected)
 		{
@@ -206,7 +226,7 @@ public class NetworkScript:MonoBehaviour
 				if(viewID == fpsEntities[i].viewID)
 				{
 					//Update this players values:
-					fpsEntities[i].UpdatePlayer(pos, ang, moveVec);
+					fpsEntities[i].UpdatePlayer(pos, ang, moveVec, kills, deaths);
 				}
 			}
 		}
@@ -263,7 +283,44 @@ public class NetworkScript:MonoBehaviour
 	void OnDisconnectedFromServer()
 	{
 		Debug.Log("Loading main menu.");
+		for(int i = 0; i < fpsEntities.Count; i++)
+		{
+			Destroy(fpsEntities[i].gameObject);
+			fpsEntities.RemoveAt(i);
+		}
+		hasSetGUI = false;
+		myGUI = null;
+		isServer = false;
+		connected = false;
+		levelLoaded = false;
+		fpsEntities = new List<FPSController>();
+		hasRegistered = false;
+		
 		Application.LoadLevel("Menu");	
+	}
+	
+	public void Kick(int playerIndex)
+	{
+		Network.CloseConnection(fpsEntities[playerIndex].viewID.owner, false);
+		networkView.RPC("KickedPlayer", RPCMode.AllBuffered, fpsEntities[playerIndex].viewID);
+	}
+	
+	[RPC]
+	void KickedPlayer(NetworkViewID viewID)
+	{
+		string kickedName = "???";
+		
+		for(int i = 0; i < fpsEntities.Count; i++)
+		{
+			if(fpsEntities[i].viewID == viewID)
+			{
+				kickedName = fpsEntities[i].myName;
+				if(fpsEntities[i] != null) Destroy(fpsEntities[i].gameObject);
+				fpsEntities.RemoveAt(i);
+			}
+		}
+		//Send chat message saying "name" was kicked:
+		SendChatMessage("_SERVER", kickedName + " was kicked by the host.");
 	}
 	
 	public void DisconnectMe()
@@ -283,5 +340,29 @@ public class NetworkScript:MonoBehaviour
 			connected = false;
 		}
 		
+	}
+	
+	IEnumerator WaitMakeNewPlayer(bool isLocal, NetworkViewID anID, string name, bool hasSkin, string skinURL)
+	{
+		Debug.Log("Waiting 5 seconds then trying to make a new player again.");
+		yield return new WaitForSeconds(5);
+		InstantiateFPSEntity(isLocal, anID, name, hasSkin, skinURL);
+	}
+	
+	//Chat
+	public void SendChatMessage(string sender, string msg)
+	{
+		networkView.RPC("SendMessageRPC", RPCMode.All, sender, msg);
+	}
+	
+	[RPC]
+	void SendMessageRPC(string name, string msg)
+	{
+		Debug.Log("MSG: " + name + " " + msg);
+		ChatMessage newMessage = new ChatMessage();
+		newMessage.sender = name;
+		newMessage.message = msg;
+		myGUI.messages.Add(newMessage);
+		myGUI.textDisplayTime = Time.time + myGUI.chatFadeTime;
 	}
 }

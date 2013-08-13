@@ -21,6 +21,7 @@ public class FPSController : MonoBehaviour {
 	public float yMovement = 0f;
 	public Vector3 lookDir;
 	public bool canControl = true;
+	//Used for networking
 	private GameObject netHolder;
 	private NetworkScript theNetwork;
 	private WWW www;
@@ -29,6 +30,8 @@ public class FPSController : MonoBehaviour {
 	private bool skinChanged = false;
 	public NetworkViewID viewID;
 	public string myName;
+	public int kills;
+	public int deaths;
 	//Gun Variables:
 	//Gun list:
 	// 0 = None
@@ -86,9 +89,11 @@ public class FPSController : MonoBehaviour {
 	void Update() 
 	{
 		if(isLocal)
-		{	
-			//Can we control
-			canControl = !GUICode.paused;
+		{
+			if(Input.GetKeyDown(KeyCode.Y))
+				kills++;
+			if(Input.GetKeyDown(KeyCode.U))
+				deaths++;
 			
 			if(canControl)
 			{
@@ -158,7 +163,7 @@ public class FPSController : MonoBehaviour {
 			moveVec = inputVector;
 			
 			//Send player information:
-			theNetwork.SendPlayer(viewID, transform.position, camAngle, moveVec);
+			theNetwork.SendPlayer(viewID, transform.position, camAngle, moveVec, kills, deaths);
 		}
 		
 		//Change Skin:
@@ -175,8 +180,10 @@ public class FPSController : MonoBehaviour {
 	}
 	
 	//Used for updating someone elses player over the network:
-	public void UpdatePlayer(Vector3 pos, Vector3 ang, Vector3 move)
+	public void UpdatePlayer(Vector3 pos, Vector3 ang, Vector3 move, int myKills, int myDeaths)
 	{
+		kills = myKills;
+		deaths = myDeaths;
 		transform.position = pos;
 		camHolder.transform.eulerAngles = ang;
 		moveVec = move;
