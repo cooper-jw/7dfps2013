@@ -29,6 +29,14 @@ public class NetworkScript:MonoBehaviour
 	public bool hasRegistered = false;
 	public bool hasSetGUI = false;
 	public GUIScript myGUI;
+	private float dmg;
+	private string gName;
+	//Damage Variables:
+	private float pistolDmg = 20f;
+	private float machineDmg = 15f;
+	private float rocketDmg = 90f;
+	private float shotgunDmg = 40f;
+	private float railgunDmg = 1000f;
 	
 	// Use this for initialization
 	void Start() 
@@ -71,6 +79,12 @@ public class NetworkScript:MonoBehaviour
 				}
 			}
 			hasSetGUI = true;
+		}
+		
+		if(!connected)
+		{
+			Screen.lockCursor = false;
+			Screen.showCursor = true;
 		}
 	}
 	
@@ -206,18 +220,18 @@ public class NetworkScript:MonoBehaviour
 	}
 	
 	//Send my player shit:
-	public void SendPlayer(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec, int myKills, int myDeaths)
+	public void SendPlayer(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec, int myGun, bool iShot, float myHp)
 	{
 		if(connected)
 		{
 			//Send everyone else an RPC with my shit:
-			networkView.RPC("SendPlayerRPC", RPCMode.Others, viewID, pos, ang, moveVec, myKills, myDeaths);	
+			networkView.RPC("SendPlayerRPC", RPCMode.Others, viewID, pos, ang, moveVec, myGun, iShot, myHp);	
 		}	
 	}
 	
 	//Recive player information:
 	[RPC]
-	void SendPlayerRPC(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec, int kills, int deaths)
+	void SendPlayerRPC(NetworkViewID viewID, Vector3 pos, Vector3 ang, Vector3 moveVec, int gun, bool shot, float hp)
 	{
 		if(connected)
 		{
@@ -226,8 +240,86 @@ public class NetworkScript:MonoBehaviour
 				if(viewID == fpsEntities[i].viewID)
 				{
 					//Update this players values:
-					fpsEntities[i].UpdatePlayer(pos, ang, moveVec, kills, deaths);
+					fpsEntities[i].UpdatePlayer(pos, ang, moveVec, gun, shot, hp);
 				}
+			}
+		}
+	}
+	
+	public void RegisterHit(NetworkViewID theShooter, NetworkViewID theVictim, int theGun)
+	{
+		//if(gameOver) return;
+		
+		if(!isServer)
+		{
+			networkView.RPC("RegisterHitRPC", RPCMode.Server, theShooter, theVictim, theGun);
+		}else{
+			RegisterHitRPC(theShooter, theVictim, theGun);
+		}
+	}
+	
+	[RPC]
+	void RegisterHitRPC(NetworkViewID shooter, NetworkViewID victim, int gun)
+	{
+		bool killingBlow= false;
+		int shooterIndex = -1;
+		int victimIndex = -1;
+		float gunDamage = GetDamage(gun);
+		
+		//Find shooter and victim:
+		for(int i = 0; i < fpsEntities.Count; i++)
+		{
+			if(fpsEntities[i].viewID == shooter) shooterIndex = i;
+			if(fpsEntities[i].viewID == victim) victimIndex = i;
+		}
+		
+		//If the player doesn't exist in our list or shot themselves, stop.
+		if(shooterIndex == -1 || victimIndex == -1 || shooterIndex == victimIndex) return;
+		
+		fpsEntities[victimIndex].currentHealth -= gunDamage;
+		
+		if(fpsEntities[victimIndex].currentHealth <= 0f)
+		{
+			fpsEntities[victimIndex].currentHealth = 0f;
+			killingBlow = true;
+		}
+		
+		if(killingBlow)
+		{
+			fpsEntities[victimIndex].deaths++;
+			fpsEntities[shooterIndex].kills++;
+		}
+		
+		networkView.RPC("UpdatePlayerStats", RPCMode.All, victim, fpsEntities[victimIndex].currentHealth, fpsEntities[victimIndex].kills, fpsEntities[victimIndex].deaths);
+		networkView.RPC("UpdatePlayerStats", RPCMode.All, shooter, fpsEntities[shooterIndex].currentHealth, fpsEntities[shooterIndex].kills, fpsEntities[shooterIndex].deaths);
+		
+		if(killingBlow)
+		{
+			string shooterName = fpsEntities[shooterIndex].myName;
+			string victimName = fpsEntities[victimIndex].myName;
+			string gunString = GetGunName(gun);
+			
+			networkView.RPC("SendMessageRPC", RPCMode.All, shooterName, " killed " + victimName + " with a " + gunString + ".");	
+		
+			//Check for win conditions:
+			//
+			//
+			//
+			//
+			//TODO:
+		}
+	}
+	
+	[RPC]
+	void UpdatePlayerStats(NetworkViewID viewID, float hp, int kills, int deaths)
+	{
+		for(int i = 0; i < fpsEntities.Count; i++)
+		{
+			if(fpsEntities[i].viewID == viewID)
+			{
+				fpsEntities[i].currentHealth = hp;
+				fpsEntities[i].kills = kills;
+				fpsEntities[i].deaths = deaths;
 			}
 		}
 	}
@@ -320,7 +412,7 @@ public class NetworkScript:MonoBehaviour
 			}
 		}
 		//Send chat message saying "name" was kicked:
-		SendChatMessage("_SERVER", kickedName + " was kicked by the host.");
+		SendChatMessage(kickedName, " was kicked by the host.");
 	}
 	
 	public void DisconnectMe()
@@ -364,5 +456,69 @@ public class NetworkScript:MonoBehaviour
 		newMessage.message = msg;
 		myGUI.messages.Add(newMessage);
 		myGUI.textDisplayTime = Time.time + myGUI.chatFadeTime;
+	}
+	
+	float GetDamage(int gun)
+	{
+		switch(gun)
+		{
+			case(0):
+				dmg = 0f;
+				break;
+			
+			case(1):
+				dmg = pistolDmg;
+				break;
+			
+			case(2):
+				dmg = machineDmg;
+				break;
+			
+			case(3):
+				dmg = rocketDmg;
+				break;
+			
+			case(4):
+				dmg = shotgunDmg;
+				break;
+			
+			case(5):
+				dmg = railgunDmg;
+				break;
+		}
+		
+		return dmg;
+	}
+	
+	string GetGunName(int gun)
+	{
+		switch(gun)
+		{
+			case(0):
+				gName = "nothing";
+				break;
+			
+			case(1):
+				gName = "pistol";
+				break;
+			
+			case(2):
+				gName = "machine gun";
+				break;
+			
+			case(3):
+				gName = "rocket launcher";
+				break;
+			
+			case(4):
+				gName = "shotgun";
+				break;
+			
+			case(5):
+				gName = "railgun";
+				break;
+		}
+		
+		return gName;
 	}
 }

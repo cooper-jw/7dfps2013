@@ -23,7 +23,8 @@ public class GUIScript : MonoBehaviour {
 	
 	public int myGun = 0;
 	public string myGunString = " ";
-	public int gunOverheatLvl = 100;
+	public int overheatInt;
+	public int healthInt;
 	
 	//Chat Variables:
 	public List<ChatMessage> messages = new List<ChatMessage>();
@@ -48,9 +49,19 @@ public class GUIScript : MonoBehaviour {
 		{
 			inGame = theNetwork.connected;
 			
-			if(isWriting || paused) 
+			if(isWriting || paused)
+			{
+				Screen.showCursor = true;
+				Screen.lockCursor = false;
 				myController.canControl = false;
-			else myController.canControl = true;
+			}
+			else 
+			{
+				Screen.showCursor = false;
+				Screen.lockCursor = true;
+				myController.canControl = true;
+			}
+			
 			
 			if(Input.GetKeyDown("t") && !isWriting)
 			{
@@ -71,6 +82,10 @@ public class GUIScript : MonoBehaviour {
 			//Unlock the mouse if we're paused:
 			if(inGame && paused) Screen.lockCursor = false;
 				else if(!isWriting) Screen.lockCursor = true;
+			//Get overheat level:
+			overheatInt = Mathf.RoundToInt(myController.overheat);
+			//Get health level:
+			healthInt = Mathf.RoundToInt(myController.currentHealth);
 			
 			//Get current gun:
 			myGun = myController.currentGun;
@@ -87,11 +102,11 @@ public class GUIScript : MonoBehaviour {
 					break;
 				
 				case(2) :
-					myGunString = "Rocket Launcher";
+					myGunString = "Machine Gun";
 					break;
 				
 				case(3) :
-					myGunString = "Machine Gun";
+					myGunString = "Rocket Launcher";
 					break;
 				
 				case(4) :
@@ -114,7 +129,9 @@ public class GUIScript : MonoBehaviour {
 				GUI.Label(new Rect((Screen.width/2) - 100, 15, 200, 30), myGunString);
 				//Display overheat level:
 				GUI.Label(new Rect(Screen.width - 140, Screen.height - 65, 130, 25), "Overheat Level:");
-				GUI.Label(new Rect(Screen.width - 80, Screen.height - 35, 70, 25), gunOverheatLvl + "%");
+				GUI.Label(new Rect(Screen.width - 80, Screen.height - 35, 70, 25), overheatInt + "%");
+				//Display health:
+				GUI.Label(new Rect(10, 10, 150, 30), healthInt.ToString());
 				//Display chat messages:
 				if(Time.time < textDisplayTime)
 				{

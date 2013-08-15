@@ -16,7 +16,12 @@ public class FPSController : MonoBehaviour {
 	public Vector3 camAngle;
 	public Vector3 moveVec;
 	public GameObject myMesh;
+	public GameObject myCam;
+	public GameObject myCamHolder;
 	public bool grounded = false;
+	public bool wasGrounded = true;
+	public AudioClip jumpSound;
+	public AudioClip landSound;
 	public bool sprinting = false;
 	public float yMovement = 0f;
 	public Vector3 lookDir;
@@ -30,8 +35,11 @@ public class FPSController : MonoBehaviour {
 	private bool skinChanged = false;
 	public NetworkViewID viewID;
 	public string myName;
+	public float currentHealth = 100f;
+	public float healthUpRate = 5f;
 	public int kills;
 	public int deaths;
+	public bool hasShot = false;
 	//Gun Variables:
 	//Gun list:
 	// 0 = None
@@ -40,6 +48,22 @@ public class FPSController : MonoBehaviour {
 	// 3 = Machine Gun
 	// ifDone 4 = Shotgun
 	public int currentGun = 0;
+	public float lastShoot = 0f;
+	public float overheat = 0.0f;
+	public float ovrDownPerSec = 10;
+	public AudioClip overheatSFX;
+	//Pistol Stuff:
+	public GameObject pistolShot;
+	public AudioClip pistolSound;
+	public float pistolROF = 0.3f;
+	public float pistolOH = 30f;
+	public float pistolShotWidth = 0.3f;
+	//Machine Gun Stuff:
+	public GameObject machineShot;
+	public AudioClip machineSound;
+	public float machineROF = 0.2f;
+	public float machineOH = 7f;
+	public float machineShotWidth = 0.2f;
 	
 	// Use this for initialization
 	void Start() 
@@ -63,6 +87,7 @@ public class FPSController : MonoBehaviour {
 			//Zero out the camera position:
 			Camera.main.transform.localPosition = Vector3.zero;
 			Camera.main.transform.localEulerAngles = Vector3.zero;
+			myCam = Camera.main.gameObject;
 			if(PlayerPrefs.GetInt("ySens") != 0 && PlayerPrefs.GetInt("xSens") != 0)
 			{
 				yCamSens = PlayerPrefs.GetInt("ySens");
@@ -73,8 +98,23 @@ public class FPSController : MonoBehaviour {
 				PlayerPrefs.SetInt("ySens", yCamSens);
 				PlayerPrefs.SetInt("xSens", xCamSens);
 			}
-		}else{
-			
+			//Set Current Gun
+			currentGun = 1; //Pistol
+		}
+		else
+		{
+			Transform[] tempTransforms = gameObject.GetComponentsInChildren<Transform>();
+			GameObject[] children = new GameObject[tempTransforms.Length - 1];
+		
+			for(int i = 0; i < tempTransforms.Length - 1; i++)
+			{
+				children[i] = tempTransforms[i+1].gameObject;	
+			}
+		
+			foreach(GameObject child in children)
+			{
+				if(child.tag == "CamHolder") myCamHolder = child;	
+			}	
 		}
 		
 		if(hasSkin)
@@ -89,11 +129,11 @@ public class FPSController : MonoBehaviour {
 	void Update() 
 	{
 		if(isLocal)
-		{
-			if(Input.GetKeyDown(KeyCode.Y))
-				kills++;
-			if(Input.GetKeyDown(KeyCode.U))
-				deaths++;
+		{	
+			hasShot = false;
+			
+			if(Input.GetKeyDown(KeyCode.F6)) currentGun--;
+			if(Input.GetKeyDown(KeyCode.F7)) currentGun++;
 			
 			if(canControl)
 			{
@@ -162,8 +202,43 @@ public class FPSController : MonoBehaviour {
 			
 			moveVec = inputVector;
 			
+			//Shoot:
+			lastShoot += Time.deltaTime;
+			overheat -= Time.deltaTime * ovrDownPerSec;
+			if(overheat < 0) overheat = 0;
+			if(Input.GetButton("Fire1") && canControl)
+			{
+				if(currentGun == 2) Shoot();
+			}
+			
+			if(Input.GetButtonDown("Fire1") && canControl)
+			{
+				if(currentGun != 2) Shoot();	
+			}
+			
+			if(currentHealth < 100)
+				currentHealth += Time.deltaTime * healthUpRate;
+			if(currentHealth > 100) currentHealth = 100;
+			
 			//Send player information:
-			theNetwork.SendPlayer(viewID, transform.position, camAngle, moveVec, kills, deaths);
+			theNetwork.SendPlayer(viewID, transform.position, camAngle, moveVec, currentGun, hasShot, currentHealth);
+		}
+		
+		if(!isLocal && hasShot)
+		{
+			Shoot();	
+		}
+		
+		if(!grounded && wasGrounded)
+		{
+			wasGrounded = false;
+			if(jumpSound != null) audio.PlayOneShot(jumpSound);
+		}
+		
+		if(grounded && !wasGrounded)
+		{
+			wasGrounded = true;
+			if(landSound != null) audio.PlayOneShot(landSound);
 		}
 		
 		//Change Skin:
@@ -180,12 +255,141 @@ public class FPSController : MonoBehaviour {
 	}
 	
 	//Used for updating someone elses player over the network:
-	public void UpdatePlayer(Vector3 pos, Vector3 ang, Vector3 move, int myKills, int myDeaths)
+	public void UpdatePlayer(Vector3 pos, Vector3 ang, Vector3 move, int gun, bool shot, float hp)
 	{
-		kills = myKills;
-		deaths = myDeaths;
+		hasShot = shot;
+		currentGun = gun;
+		currentHealth = hp;
 		transform.position = pos;
 		camHolder.transform.eulerAngles = ang;
 		moveVec = move;
+		if(hasShot) Shoot();
+	}
+	
+	void Shoot()
+	{
+		if(currentGun == 0)
+		{
+			Debug.Log("You're not holding a gun ;_;");
+		}
+		else if(currentGun == 1)
+		{
+			//Pistol:
+			if(lastShoot > pistolROF && overheat + pistolOH <= 110f && isLocal)
+			{ 
+				if(overheat >= 100f && overheatSFX != null) audio.PlayOneShot(overheatSFX);
+				if(overheat > 100f) overheat = 100f;
+				lastShoot = 0f;
+				hasShot = true;
+				overheat += pistolOH;
+				if(pistolSound) audio.PlayOneShot(pistolSound);
+				//Raycasting
+				Ray ray;
+				RaycastHit hit;
+				
+				ray = new Ray(myCam.transform.position + new Vector3(0f, -0.1f, 0f), myCam.transform.forward);
+				if(Physics.Raycast(ray, out hit, 1000))
+				{
+					GameObject shotEntity = (GameObject)GameObject.Instantiate(pistolShot);
+					LineRenderer shot = shotEntity.GetComponent<LineRenderer>();
+					
+					shot.useWorldSpace = true;
+					shot.SetWidth(pistolShotWidth, pistolShotWidth);
+					shot.SetPosition(0, ray.origin);
+					shot.SetPosition(1, hit.point);
+					
+					//If hit with player tag
+					//Hit(viewID);
+					if(hit.transform.gameObject.tag == "Player" && isLocal)
+					{
+						//Debug.Log("I DONE GOT ONE!");
+						GameObject hitPlayer = hit.transform.gameObject;
+						FPSController hitController = hitPlayer.GetComponent<FPSController>();
+						NetworkViewID hitViewID = hitController.viewID;
+						theNetwork.RegisterHit(viewID, hitViewID, currentGun);
+					}
+				}
+			}
+			else if(!isLocal)
+			{
+				if(pistolSound) audio.PlayOneShot(pistolSound);
+				Ray ray;
+				RaycastHit hit;
+				
+				ray = new Ray(myCamHolder.transform.position + new Vector3(0f, -0.1f, 0f), myCamHolder.transform.forward);
+				if(Physics.Raycast(ray, out hit, 1000))
+				{
+					GameObject shotEntity = (GameObject)GameObject.Instantiate(pistolShot);
+					LineRenderer shot = shotEntity.GetComponent<LineRenderer>();
+					
+					shot.useWorldSpace = true;
+					shot.SetWidth(pistolShotWidth, pistolShotWidth);
+					shot.SetPosition(0, ray.origin);
+					shot.SetPosition(1, hit.point);
+				}
+			}
+		}
+		else if(currentGun == 2)
+		{
+			//Machine Gun:
+			if(lastShoot > machineROF && overheat + machineOH <= 102f && isLocal)
+			{ 
+				if(overheat >= 100f && overheatSFX != null) audio.PlayOneShot(overheatSFX);
+				if(overheat > 100f) overheat = 100f;
+				lastShoot = 0f;
+				hasShot = true;
+				overheat += machineOH;
+				if(pistolSound) audio.PlayOneShot(machineSound);
+				//Raycasting
+				Ray ray;
+				RaycastHit hit;
+				
+				ray = new Ray(myCam.transform.position + new Vector3(0f, -0.1f, 0f), myCam.transform.forward);
+				if(Physics.Raycast(ray, out hit, 1000))
+				{
+					GameObject shotEntity = (GameObject)GameObject.Instantiate(machineShot);
+					LineRenderer shot = shotEntity.GetComponent<LineRenderer>();
+					
+					shot.useWorldSpace = true;
+					shot.SetWidth(machineShotWidth, machineShotWidth);
+					shot.SetPosition(0, ray.origin);
+					shot.SetPosition(1, hit.point);
+					
+					//If hit with player tag
+					//Hit(viewID);
+					if(hit.transform.gameObject.tag == "Player" && isLocal)
+					{
+						//Debug.Log("I DONE GOT ONE!");
+						GameObject hitPlayer = hit.transform.gameObject;
+						FPSController hitController = hitPlayer.GetComponent<FPSController>();
+						NetworkViewID hitViewID = hitController.viewID;
+						theNetwork.RegisterHit(viewID, hitViewID, currentGun);
+					}
+				}
+			}
+			else if(!isLocal)
+			{
+				if(machineSound) audio.PlayOneShot(machineSound);
+				Ray ray;
+				RaycastHit hit;
+				
+				ray = new Ray(myCamHolder.transform.position + new Vector3(0f, -0.1f, 0f), myCamHolder.transform.forward);
+				if(Physics.Raycast(ray, out hit, 1000))
+				{
+					GameObject shotEntity = (GameObject)GameObject.Instantiate(machineShot);
+					LineRenderer shot = shotEntity.GetComponent<LineRenderer>();
+					
+					shot.useWorldSpace = true;
+					shot.SetWidth(machineShotWidth, machineShotWidth);
+					shot.SetPosition(0, ray.origin);
+					shot.SetPosition(1, hit.point);
+				}
+			}	
+		}
+		else
+		{
+			Debug.Log("Gun ID" + currentGun + " is not implemented yet D:");	
+		}
+			
 	}
 }
