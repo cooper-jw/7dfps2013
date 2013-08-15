@@ -39,6 +39,8 @@ public class MenuGUI : MonoBehaviour {
 	private string gLoopString;
 	public int mouseSens;
 	public float mouseSensf;
+	public int myKills;
+	public int myDeaths;
 	
 	//Server Setup Variables:
 	public string serverName = "Default Name";
@@ -85,6 +87,27 @@ public class MenuGUI : MonoBehaviour {
 			PlayerPrefs.SetInt("xSens", mouseSens);
 		}
 		mouseSensf = (float)mouseSens;
+		//Get kills and deaths:
+		if(PlayerPrefs.GetInt ("kills") != 0)
+		{
+			myKills = PlayerPrefs.GetInt("kills");	
+		}
+		else
+		{
+			myKills = 0;
+			PlayerPrefs.SetInt("kills", myKills);
+		}
+		
+		if(PlayerPrefs.GetInt ("deaths") != 0)
+		{
+			myDeaths = PlayerPrefs.GetInt("deaths");	
+		}
+		else
+		{
+			myDeaths = 0;
+			PlayerPrefs.SetInt("deaths", myDeaths);
+		}
+		
 		//Server Setup Variables:
 		selectedMap = 0;
 		selectedGM = 0;
@@ -184,6 +207,13 @@ public class MenuGUI : MonoBehaviour {
 			GUILayout.Label("Welcome to Killer Death Cubes (KDC)");
 			GUILayout.Label("This game was made for #7dfps by Joe Cooper");
 			GUILayout.Label("Find me on twitter @themisfit25");
+			GUILayout.Label("Don't forget to change your name!");
+			GUILayout.Label("And for the best results play over LAN");
+			GUILayout.Space(10f);
+			GUILayout.Label("Player Statistics:");
+			GUILayout.Label("Player Name: " + playerName);
+			GUILayout.Label("Player Kills: " + myKills);
+			GUILayout.Label("Player Deaths: " + myDeaths);
 		}
 		else if(currentMenu == "startServer")
 		{

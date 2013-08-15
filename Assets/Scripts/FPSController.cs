@@ -392,4 +392,27 @@ public class FPSController : MonoBehaviour {
 		}
 			
 	}
+	
+	public void Death()
+	{
+		//Reset player variables:
+		currentGun = 1;
+		currentHealth = 100;
+		overheat = 0;
+		//"Respawn":
+		int spawnIndex = Random.Range(0, theNetwork.spawnPoints.Count + 1);
+		Transform mySpawn = theNetwork.spawnPoints[spawnIndex];
+		gameObject.transform.position = mySpawn.position;
+		//Update player pref deaths:
+		int totalDeaths = PlayerPrefs.GetInt("deaths");
+		totalDeaths++;
+		PlayerPrefs.SetInt("deaths", totalDeaths);
+	}
+	
+	public void Killer()
+	{
+		int totalKills = PlayerPrefs.GetInt("kills");
+		totalKills++;
+		PlayerPrefs.SetInt("kills", totalKills);
+	}
 }

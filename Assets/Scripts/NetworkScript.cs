@@ -13,6 +13,8 @@ public class NetworkScript:MonoBehaviour
 	public bool hasSkin;
 	public GameObject fpsEntityPrefab;
 	public List<FPSController> fpsEntities = new List<FPSController>();
+	public GameObject spawnHolder;
+	public List<Transform> spawnPoints = new List<Transform>();
 	public NetworkViewID netviewID;
 	public bool preppingLevel = false;
 	public bool levelLoaded;
@@ -171,6 +173,13 @@ public class NetworkScript:MonoBehaviour
 			Debug.Log("Level " + levelString + " was loaded.");
 			levelLoaded = true;
 			preppingLevel = false;
+			spawnHolder = GameObject.FindGameObjectWithTag("Spawn");
+			
+			foreach(Transform child in spawnHolder.GetComponentsInChildren<Transform>())
+			{
+				if(child.gameObject.tag != "Spawn") spawnPoints.Add(child);
+			}
+			
 			netviewID = Network.AllocateViewID();
 			InstantiateFPSEntity(true, netviewID, playerName, hasSkin, skinURL);
 			networkView.RPC("NewPlayer", RPCMode.OthersBuffered, netviewID, playerName, hasSkin, skinURL);			
@@ -299,7 +308,9 @@ public class NetworkScript:MonoBehaviour
 			string victimName = fpsEntities[victimIndex].myName;
 			string gunString = GetGunName(gun);
 			
-			networkView.RPC("SendMessageRPC", RPCMode.All, shooterName, " killed " + victimName + " with a " + gunString + ".");	
+			networkView.RPC("SendMessageRPC", RPCMode.All, shooterName, " killed " + victimName + " with a " + gunString + ".");
+			networkView.RPC("KillerRPC", RPCMode.All, shooter);
+			networkView.RPC("DeathRPC", RPCMode.All, victim);
 		
 			//Check for win conditions:
 			//
@@ -320,6 +331,36 @@ public class NetworkScript:MonoBehaviour
 				fpsEntities[i].currentHealth = hp;
 				fpsEntities[i].kills = kills;
 				fpsEntities[i].deaths = deaths;
+			}
+		}
+	}
+	
+	[RPC]
+	void KillerRPC(NetworkViewID viewID)
+	{
+		if(viewID == netviewID)
+		{
+			for(int i = 0; i < fpsEntities.Count; i++)
+			{
+				if(fpsEntities[i].viewID == netviewID)
+				{
+					fpsEntities[i].Killer();
+				}
+			}
+		}
+	}
+	
+	[RPC]
+	void DeathRPC(NetworkViewID viewID)
+	{
+		if(viewID == netviewID)
+		{
+			for(int i = 0; i < fpsEntities.Count; i++)
+			{
+				if(fpsEntities[i].viewID == netviewID)
+				{
+					fpsEntities[i].Death();
+				}
 			}
 		}
 	}
@@ -374,17 +415,21 @@ public class NetworkScript:MonoBehaviour
 	
 	void OnDisconnectedFromServer()
 	{
+		//Reset all the variables we use:
 		Debug.Log("Loading main menu.");
 		for(int i = 0; i < fpsEntities.Count; i++)
 		{
 			Destroy(fpsEntities[i].gameObject);
 			fpsEntities.RemoveAt(i);
 		}
+		netviewID = new NetworkViewID();
 		hasSetGUI = false;
 		myGUI = null;
 		isServer = false;
 		connected = false;
 		levelLoaded = false;
+		spawnHolder = null;
+		spawnPoints = new List<Transform>();
 		fpsEntities = new List<FPSController>();
 		hasRegistered = false;
 		
